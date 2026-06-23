@@ -291,7 +291,23 @@ def render_main_table(df: pd.DataFrame) -> None:
     table_df["€/m²"] = table_df["€/m²"].apply(lambda x: f"{x:,.0f}")
     table_df["Plocha (m²)"] = table_df["Plocha (m²)"].apply(lambda x: f"{x:g}")
 
-    st.dataframe(table_df, use_container_width=True, hide_index=True, height=420)
+    # Clickable link — first URL from source_urls list
+    table_df["🔗 Link"] = df["source_urls"].apply(
+        lambda urls: urls[0] if isinstance(urls, list) and urls else None
+    )
+
+    st.dataframe(
+        table_df,
+        use_container_width=True,
+        hide_index=True,
+        height=420,
+        column_config={
+            "🔗 Link": st.column_config.LinkColumn(
+                "🔗 Link",
+                display_text="otvoriť",
+            ),
+        },
+    )
 
     # ── Note editor ───────────────────────────────────────────────────────────
     st.markdown('<p class="section-header">✏️ Interné poznámky</p>', unsafe_allow_html=True)
