@@ -25,6 +25,7 @@ from utils.engine import (
     RawListing,
     upsert_listing,
 )
+import threading
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -164,6 +165,13 @@ def save_note(listing_id: int, note: str) -> None:
             listing.internal_notes = note
             listing.updated_at = datetime.utcnow()
             db.commit()
+    finally:
+        db.close()
+
+def get_inactive_count() -> int:
+    db = get_db()
+    try:
+        return db.query(Listing).filter(Listing.status == "inactive").count()
     finally:
         db.close()
 
@@ -577,15 +585,48 @@ def main() -> None:
 
     # Footer
     st.sidebar.divider()
+    inactive_count = get_inactive_count()
     st.sidebar.caption(
-        f"Celkom v DB: {len(all_df)} aktívnych inzerátov\n\n"
+        f"Aktívne: **{len(all_df)}** | Neaktívne: **{inactive_count}**\n\n"
         "Formula Hot Deal:\n"
-        "P_sqm ≤ 0.80 × medián_segmentu\n"
+        "`P_sqm ≤ 0.80 × medián_segmentu`\n"
         "(po IQR očistení outlierov)"
     )
     if st.sidebar.button("🔄 Obnoviť dáta"):
         st.cache_resource.clear()
         st.rerun()
+
+    st.sidebar.divider()
+    st.sidebar.markdown("## ⚙️ Scrapery")
+
+    scraper_choice = st.sidebar.selectbox(
+        "Portál",
+        ["Všetky", "nehnutelnosti", "bazos", "topreality"],
+        key="scraper_choice",
+    )
+
+    if st.sidebar.button("▶ Spustiť scraping", key="run_scrapers_btn"):
+        filter_val = None if scraper_choice == "Všetky" else scraper_choice
+        with st.sidebar:
+            with st.spinner(f"Scraping {scraper_choice}... (môže trvať niekoľko minút)"):
+                try:
+                    import run_scrapers
+                    result = run_scrapers.run(
+                        scraper_filter=filter_val,
+                        dry_run=False,
+                        mark_inactive=True,
+                    )
+                    st.success(
+                        f"✅ Hotovo!\n\n"
+                        f"Nové: **{result['inserted']}** | "
+                        f"Aktualizované: **{result['merged']}** | "
+                        f"Neaktívne: **{result['inactive']}** | "
+                        f"Chyby: **{result['errors']}**"
+                    )
+                    st.cache_resource.clear()
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Chyba pri scrapovaní: {exc}")
 
 
 if __name__ == "__main__":

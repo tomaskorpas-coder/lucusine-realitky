@@ -34,11 +34,32 @@ DEFAULT_HEADERS = {
 }
 
 NITRA_DISTRICT_CITIES = {
-    "Nitra", "Šurany", "Zlaté Moravce", "Vráble", "Nové Zámky",
+    # Okres Nitra — všetky obce a mestá
+    "Nitra", "Šurany", "Zlaté Moravce", "Vráble",
     "Mojmírovce", "Čab", "Cabaj-Čápor", "Lužianky", "Paňa",
     "Pohranice", "Rumanová", "Štefanovičová", "Veľké Zálužie",
     "Jarok", "Malé Zálužie", "Ivánka pri Nitre", "Branč",
+    "Beladice", "Bíňa", "Ľudovítová", "Čechynce", "Andač",
+    "Báb", "Babindol", "Dolné Obdokovce", "Horné Obdokovce",
+    "Klasov", "Komjatice", "Krškany", "Melek", "Michal nad Žitavou",
+    "Nová Ves nad Žitavou", "Ľudovítová", "Zbehy", "Žirany",
+    "Štitáre", "Sľažany", "Výčapy-Opatovce", "Veľký Cetín",
+    "Malý Cetín", "Novosady", "Telince", "Zlatno", "Jelenec",
+    "Golianovo", "Hruboňovo", "Dražovce", "Čermáň",
+    "Nové Zámky",  # susedný okres, ale blízko a často vyhľadávaný
 }
+
+
+def is_nitra_district(city: str) -> bool:
+    """Return True if city name (nominative or locative form) matches Nitriansky okres."""
+    city_clean = city.strip().title()
+    if city_clean in NITRA_DISTRICT_CITIES:
+        return True
+    # Fuzzy: check if any known city is a substring of or contained in city_clean
+    for known in NITRA_DISTRICT_CITIES:
+        if known in city_clean or city_clean in known:
+            return True
+    return False
 
 
 class BaseScraper(ABC):

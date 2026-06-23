@@ -246,6 +246,70 @@ def get_all_listings_df(db: Session) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+def mark_stale_listings(db: Session, source_domain: str, seen_urls: set[str]) -> int:
+    """
+    After a scraper run, mark as inactive any listing whose source URLs
+    all belong to source_domain but NONE were found in this run.
+
+    Only marks inactive listings that originated exclusively from this portal.
+    Listings merged from multiple portals are only marked inactive when
+    ALL their portal URLs have gone stale.
+
+    Returns count of listings marked inactive.
+    """
+    if not seen_urls:
+        logger.warning(
+            "mark_stale_listings called with empty seen_urls for %s — skipping to avoid false positives.",
+            source_domain,
+        )
+        return 0
+
+    domain_pattern = source_domain.replace("www.", "")
+    active_listings = db.query(Listing).filter(Listing.status == "active").all()
+    marked = 0
+
+    for listing in active_listings:
+        urls = listing.get_source_urls()
+        if not urls:
+            continue
+
+        # URLs from THIS portal
+        portal_urls = [u for u in urls if domain_pattern in u]
+        if not portal_urls:
+            continue  # listing doesn't belong to this portal
+
+        # URLs from OTHER portals
+        other_urls = [u for u in urls if domain_pattern not in u]
+
+        # Any of this portal's URLs seen in current run?
+        any_seen = any(u in seen_urls for u in portal_urls)
+        if any_seen:
+            continue  # still active on this portal
+
+        # If listing exists on other portals too, don't mark inactive yet
+        if other_urls:
+            continue
+
+        # Exclusively on this portal and not found → mark inactive
+        history = PriceHistory(
+            listing_id=listing.id,
+            old_price=listing.absolute_price,
+            new_price=listing.absolute_price,
+            old_price_per_sqm=listing.price_per_sqm,
+            new_price_per_sqm=listing.price_per_sqm,
+            note=f"marked inactive — not found on {source_domain}",
+        )
+        db.add(history)
+        listing.status = "inactive"
+        listing.updated_at = datetime.utcnow()
+        marked += 1
+
+    if marked:
+        db.commit()
+        logger.info("Marked %d listings as inactive (not found on %s)", marked, source_domain)
+    return marked
+
+
 def detect_hot_deals(db: Session) -> pd.DataFrame:
     """
     Full pipeline:
